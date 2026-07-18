@@ -1,0 +1,2 @@
+# Force GitHub to treat specific files as code
+*.bazel linguist-language=Python

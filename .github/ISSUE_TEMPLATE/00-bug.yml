@@ -1,0 +1,83 @@
+name: Bug report
+description: Report a bug or unexpected behavior in OpenTCL
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve OpenTCL. Please provide as much detail as possible so the issue can be reproduced and fixed.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Bug summary
+      description: A short description of the issue.
+      placeholder: Describe what went wrong.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Provide the steps needed to reproduce the bug.
+      placeholder: |
+        1. Open the project...
+        2. Run...
+        3. Observe...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen?
+      placeholder: The program should...
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What actually happened instead?
+      placeholder: Instead, the program...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      description: Select the platform where the issue occurred.
+      options:
+        - Linux
+        - Windows
+        - macOS
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      description: If known, provide the version, branch, or commit hash.
+      placeholder: e.g. main, v1.0.0, commit abc123
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or error output
+      description: Paste any relevant compiler output, stack traces, or logs.
+      render: shell
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Add any other details, screenshots, or references.
+      placeholder: Mention related issues, screenshots, or anything else that helps.
