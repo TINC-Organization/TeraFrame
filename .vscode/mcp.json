@@ -1,0 +1,62 @@
+{
+	"servers": {
+		"io.github.netdata/mcp-server": {
+			"type": "http",
+			"url": "https://app.netdata.cloud/api/v1/mcp",
+			"headers": {
+				"Authorization": "Bearer ${input:NETDATA_CLOUD_API_TOKEN}"
+			},
+			"gallery": "https://api.mcp.github.com",
+			"version": "2.10.3"
+		},
+		"io.github.github/github-mcp-server": {
+			"type": "stdio",
+			"command": "docker",
+			"args": [
+				"run",
+				"-i",
+				"--rm",
+				"-p",
+				"127.0.0.1:8085:8085",
+				"-e",
+				"GITHUB_OAUTH_CALLBACK_PORT=8085",
+				"-e",
+				"GITHUB_PERSONAL_ACCESS_TOKEN=${input:token}",
+				"ghcr.io/github/github-mcp-server:1.5.0"
+			],
+			"gallery": "https://api.mcp.github.com",
+			"version": "1.5.0"
+		},
+		"mongodb": {
+			"command": "npx",
+			"args": [
+				"-y",
+				"mongodb-mcp-server",
+				"--readOnly"
+			],
+			"env": {
+				"MDB_MCP_CONNECTION_STRING": "${input:connection_string}"
+			},
+			"type": "stdio"
+		}
+	},
+	"inputs": [
+		{
+			"id": "NETDATA_CLOUD_API_TOKEN",
+			"type": "promptString",
+			"description": "Netdata Cloud API token (create at app.netdata.cloud > User Settings > API Tokens with scope:mcp)",
+			"password": true
+		},
+		{
+			"id": "token",
+			"type": "promptString",
+			"description": "",
+			"password": true
+		},
+		{
+			"id": "connection_string",
+			"type": "promptString",
+			"description": "MongoDB connection string"
+		}
+	]
+}
