@@ -1,0 +1,452 @@
+#ifndef ARENA_H
+#define ARENA_H
+
+#include <stddef.h>
+
+#if __STDC_VERSION__ >= 201112L
+#include <stdalign.h>
+#define ARENA_ALIGNOF(type) alignof(type)
+#else
+#define ARENA_ALIGNOF(type) offsetof(struct { char c; type d; }, d)
+#endif
+
+#ifndef ARENA_DEFAULT_ALIGNMENT
+#define ARENA_DEFAULT_ALIGNMENT ARENA_ALIGNOF(size_t)
+#endif
+
+#ifdef ARENA_DEBUG
+
+#include <stdlib.h>
+
+typedef struct Arena_Allocation_s
+{
+    size_t index;
+    size_t size;
+    char *pointer;
+    struct Arena_Allocation_s *next;
+} Arena_Allocation;
+
+#endif /* ARENA_DEBUG */
+
+typedef struct
+{
+    char *region;
+    size_t index;
+    size_t size;
+
+#ifdef ARENA_DEBUG
+    unsigned long allocations;
+    Arena_Allocation *head_allocation;
+#endif /* ARENA_DEBUG */
+} Arena;
+
+void arena_init(Arena *, void *, size_t);
+Arena *arena_create(size_t);
+void *arena_alloc(Arena *, size_t);
+void *arena_alloc_aligned(Arena *, size_t, unsigned int);
+size_t arena_copy(Arena *, Arena *);
+void arena_clear(Arena *);
+void arena_destroy(Arena *);
+#ifdef ARENA_DEBUG
+Arena_Allocation *arena_get_allocation_struct(Arena *, void *);
+void arena_add_allocation(Arena *, size_t);
+void arena_delete_allocation_list(Arena *);
+#endif /* ARENA DEBUG */
+
+/*
+Initialize an arena object with pointers to the arena and a
+pre-allocated region, as well as the size of the provided
+region. Good for using the stack instead of the heap, if you
+so desire.
+
+Parameters:
+  Arena *arena    |   The arena object being initialized.
+  void *region    |   The region to be arena-fyed.
+  size_t size     |   The size of the region in bytes.
+*/
+void arena_init(Arena *arena, void *region, size_t size);
+
+/*
+Allocate and return a pointer to memory to the arena
+with a region with the specified size. Providing a
+size of zero results in a failure. Be sure to destory
+with arena_destroy later.
+
+Parameters:
+  size_t size    |    The size (in bytes) of the arena
+                      memory region.
+Return:
+  Pointer to arena on success, NULL on failure
+*/
+Arena *arena_create(size_t size);
+
+/*
+Return a pointer to a portion of specified size of the
+specified arena's region. Nothing will restrict you
+from allocating more memory than you specified, so be
+mindful of your memory (as you should anyways) or you
+will get some hard-to-track bugs. By default, memory is
+aligned by alignof(size_t), but you can change this by
+#defining ARENA_DEFAULT_ALIGNMENT before #include'ing
+arena.h. Providing a size of zero results in a failure.
+
+Parameters:
+  Arena *arena    |    The arena of which the pointer
+                       from the region will be
+                       distributed
+  size_t size     |    The size (in bytes) of
+                       allocated memory planned to be
+                       used.
+Return:
+  Pointer to arena region segment on success, NULL on
+  failure.
+*/
+void *arena_alloc(Arena *arena, size_t size);
+
+/*
+Same as arena_alloc, except you can specify a memory
+alignment for allocations.
+
+Return a pointer to a portion of specified size of the
+specified arena's region. Nothing will restrict you
+from allocating more memory than you specified, so be
+mindful of your memory (as you should anyways) or you
+will get some hard-to-track bugs. Providing a size of
+zero results in a failure.
+
+Parameters:
+  Arena *arena              |    The arena of which the pointer
+                                 from the region will be
+                                 distributed
+  size_t size               |    The size (in bytes) of
+                                 allocated memory planned to be
+                                 used.
+  unsigned int alignment    |    Alignment (in bytes) for each
+                                 memory allocation.
+Return:
+  Pointer to arena region segment on success, NULL on
+  failure.
+*/
+void *arena_alloc_aligned(Arena *arena, size_t size, unsigned int alignment);
+
+/*
+Copy the memory contents of one arena to another.
+
+Parameters:
+  Arena *src     |    The arena being copied, the source.
+  Arena *dest    |    The arena being copied to. Must be created/allocated
+                      already.
+
+Return:
+  Number of bytes copied.
+*/
+size_t arena_copy(Arena *dest, Arena *src);
+
+/*
+Reset the pointer to the arena region to the beginning
+of the allocation. Allows reuse of the memory without
+expensive frees.
+
+Parameters:
+  Arena *arena    |    The arena to be cleared.
+*/
+void arena_clear(Arena *arena);
+
+/*
+Free the memory allocated for the entire arena region.
+
+Parameters:
+  Arena *arena    |    The arena to be destroyed.
+*/
+void arena_destroy(Arena *arena);
+
+#ifdef ARENA_DEBUG
+
+/*
+Returns a pointer to the allocation struct associated
+with a pointer to a segment in the specified arena's
+region.
+
+Parameters:
+  Arena *arena    |    The arena whose region should
+                       have a portion pointed to by
+                       ptr.
+  void *ptr       |    The ptr being searched for
+                       within the arena in order to
+                       find an allocation struct
+                       associated with it.
+*/
+Arena_Allocation *arena_get_allocation_struct(Arena *arena, void *ptr);
+
+/*
+Adds an arena allocation to the arena's linked list of
+allocations under debug.
+
+Parameters:
+  Arena *arena    |    The arena whose allocation list
+                       should be added to
+  size_t size     |    The size of the allocation being
+                       added.
+*/
+void arena_add_allocation(Arena *arena, size_t size);
+
+/*
+Deletes the arena's linked list of allocations under
+debug.
+
+Parameters:
+  Arena *arena    |    The arena whose allocation list
+                       is being deleted.
+*/
+void arena_delete_allocation_list(Arena *arena);
+
+#endif /* ARENA_DEBUG */
+
+#ifdef ARENA_IMPLEMENTATION
+
+#ifndef ARENA_MALLOC
+#include <stdlib.h>
+#define ARENA_MALLOC malloc
+#endif /* !ARENA_MALLOC */
+
+#ifndef ARENA_FREE
+#include <stdlib.h>
+#define ARENA_FREE free
+#endif /* !ARENA_FREE */
+
+#ifndef ARENA_MEMCPY
+#include <string.h>
+#define ARENA_MEMCPY memcpy
+#endif /* !ARENA_MEMCPY */
+
+void arena_init(Arena *arena, void *region, size_t size)
+{
+    if (!arena)
+    {
+        return;
+    }
+
+    if ((region == NULL) ^ (size == 0))
+    {
+        return;
+    }
+
+    arena->region = region;
+    arena->index = 0;
+    arena->size = size;
+
+#ifdef ARENA_DEBUG
+    arena->head_allocation = NULL;
+    arena->allocations = 0;
+#endif /* ARENA_DEBUG */
+}
+
+Arena *arena_create(size_t size)
+{
+    Arena *arena;
+    void *region;
+
+    if (size == 0)
+    {
+        return NULL;
+    }
+
+    /* A malloc of 0 is implementation defined, so the above check is necessary */
+    arena = ARENA_MALLOC(sizeof(Arena));
+    if (arena == NULL)
+    {
+        return NULL;
+    }
+
+    region = ARENA_MALLOC(size);
+    if (region == NULL)
+    {
+        return NULL;
+    }
+
+    arena_init(arena, region, size);
+
+    return arena;
+}
+
+void *arena_alloc(Arena *arena, size_t size)
+{
+    return arena_alloc_aligned(arena, size, ARENA_DEFAULT_ALIGNMENT);
+}
+
+void *arena_alloc_aligned(Arena *arena, size_t size, unsigned int alignment)
+{
+    unsigned int offset;
+
+    if (size == 0)
+    {
+        return NULL;
+    }
+
+    if (arena == NULL || arena->region == NULL)
+    {
+        return NULL;
+    }
+
+    if (alignment != 0)
+    {
+        offset = alignment - (size_t)(arena->region + arena->index) % alignment;
+        offset = offset == alignment ? 0 : offset;
+    }
+    else
+    {
+        offset = 0;
+    }
+
+    if (arena->index + offset >= arena->size || arena->size - arena->index - offset < size)
+    {
+        return NULL;
+    }
+
+    arena->index += offset;
+
+#ifdef ARENA_DEBUG
+    arena_add_allocation(arena, size);
+#endif /* ARENA_DEBUG */
+
+    arena->index += size;
+    return arena->region + (arena->index - size);
+}
+
+size_t arena_copy(Arena *dest, Arena *src)
+{
+    size_t bytes;
+
+    if (dest == NULL || src == NULL)
+    {
+        return 0;
+    }
+
+    if (src->index < dest->size)
+    {
+        bytes = src->index;
+    }
+    else
+    {
+        bytes = dest->size;
+    }
+
+    ARENA_MEMCPY(dest->region, src->region, bytes);
+    dest->index = bytes;
+
+    return bytes;
+}
+
+void arena_clear(Arena *arena)
+{
+    if (arena == NULL)
+    {
+        return;
+    }
+
+    arena->index = 0;
+
+#ifdef ARENA_DEBUG
+    arena_delete_allocation_list(arena);
+#endif /* ARENA_DEBUG */
+}
+
+void arena_destroy(Arena *arena)
+{
+    if (arena == NULL)
+    {
+        return;
+    }
+
+#ifdef ARENA_DEBUG
+    arena_delete_allocation_list(arena);
+#endif /* ARENA_DEBUG */
+
+    if (arena->region != NULL)
+    {
+        ARENA_FREE(arena->region);
+    }
+
+    ARENA_FREE(arena);
+}
+
+#ifdef ARENA_DEBUG
+
+Arena_Allocation *arena_get_allocation_struct(Arena *arena, void *ptr)
+{
+    Arena_Allocation *current;
+
+    if (arena == NULL || ptr == NULL)
+    {
+        return NULL;
+    }
+
+    current = arena->head_allocation;
+    while (current != NULL)
+    {
+        if (current->pointer == (char *)ptr)
+        {
+            return current;
+        }
+        current = current->next;
+    }
+
+    return NULL;
+}
+
+void arena_add_allocation(Arena *arena, size_t size)
+{
+    if (arena == NULL)
+    {
+        return;
+    }
+
+    if (arena->head_allocation == NULL)
+    {
+        arena->head_allocation = malloc(sizeof(Arena_Allocation));
+        arena->head_allocation->index = arena->index;
+        arena->head_allocation->size = size;
+        arena->head_allocation->pointer = arena->region + arena->index;
+        arena->head_allocation->next = NULL;
+    }
+    else
+    {
+        Arena_Allocation *current = arena->head_allocation;
+        while (current->next != NULL)
+        {
+            current = current->next;
+        }
+
+        current->next = malloc(sizeof(Arena_Allocation));
+        current->next->index = arena->index;
+        current->next->size = size;
+        current->next->pointer = arena->region + arena->index;
+        current->next->next = NULL;
+    }
+
+    arena->allocations++;
+}
+
+void arena_delete_allocation_list(Arena *arena)
+{
+    if (arena == NULL)
+    {
+        return;
+    }
+
+    while (arena->head_allocation != NULL)
+    {
+        Arena_Allocation *next = arena->head_allocation->next;
+        free(arena->head_allocation);
+        arena->head_allocation = next;
+    }
+
+    arena->allocations = 0;
+    arena->head_allocation = NULL;
+}
+
+#endif /* ARENA_DEBUG */
+
+#endif /* ARENA_IMPLEMENTATION */
+
+#endif /* ARENA_H */

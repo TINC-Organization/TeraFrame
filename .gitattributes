@@ -1,2 +1,11 @@
+<<<<<<< HEAD
 # Force GitHub to treat specific files as code
 *.bazel linguist-language=Python
+=======
+<<<<<<< HEAD
+
+=======
+# Force GitHub to treat specific files as code
+*.bazel linguist-language=Python
+>>>>>>> 5c60044 (infrastructure: initial launch of TeraFrame core framework)
+>>>>>>> a2ddb9b (Commit all new and modified files)
